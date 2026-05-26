@@ -3,7 +3,8 @@ from datetime import datetime
 import os
 
 from s3 import s3, BUCKET
-from db import conn, cur
+
+from botocore.exceptions import ClientError
 
 app = FastAPI()
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
@@ -29,13 +30,6 @@ async def upload_image(
     # subir a S3
     s3.upload_fileobj(file.file, BUCKET, s3_key)
 
-    # guardar en RDS
-    cur.execute("""
-        INSERT INTO images (username, image_path)
-        VALUES (%s, %s)
-    """, (username, s3_key))
-
-    conn.commit()
 
     return {
         "message": "Imagen subida correctamente",
@@ -51,27 +45,43 @@ def get_image(username: str, image_name: str):
 
     s3_key = f"users/{username}/{image_name}"
 
-    cur.execute("""
-        SELECT image_path, created_at
-        FROM images
-        WHERE username=%s AND image_path=%s
-    """, (username, s3_key))
+    
 
-    result = cur.fetchone()
+    # if not result:
+    #     raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    if not result:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+    # url = s3.generate_presigned_url(
+    #     "get_object",
+    #     Params={
+    #         "Bucket": BUCKET,
+    #         "Key": s3_key
+    #     },
+    #     ExpiresIn=3600
+    # )
 
-    url = s3.generate_presigned_url(
-        "get_object",
-        Params={
-            "Bucket": BUCKET,
-            "Key": s3_key
-        },
-        ExpiresIn=3600
-    )
+    try:
+        response=s3.head_object(Bucket=BUCKET, Key=s3_key)
+
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": BUCKET,
+                "Key": s3_key
+         },
+            ExpiresIn=3600
+        )
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+           raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+        else:
+            raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
 
     return {
         "url": url,
-        "uploaded_at": result[1]
+        "uploaded_at": response["LastModified"]
+
+
     }
