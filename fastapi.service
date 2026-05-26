@@ -1,0 +1,19 @@
+[Unit]
+Description=FastAPI Service (Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+
+WorkingDirectory=/home/ubuntu/Final_SO_2
+
+ExecStart=/bin/bash -c "uvicorn main:app --host 0.0.0.0 --port 8000"
+
+Restart=always
+RestartSec=5
+
+
+Environment=PATH=/home/ubuntu/miniconda3/envs/FASTAPI_FINAL/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
